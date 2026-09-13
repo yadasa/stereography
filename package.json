@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check frontend/app.js && node --check scripts/build.mjs"
+    "dev": "npm run build && node scripts/serve-local.mjs",
+    "check": "node --check frontend/app.js && node --check scripts/build.mjs && node --check scripts/serve-local.mjs"
   }
 }
-
