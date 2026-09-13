@@ -1,6 +1,6 @@
 # Stereo Depth Lab
 
-A private, local-GPU stereoscopic video workflow. The hosted control surface runs in the browser, while the actual video and model inference stay on `127.0.0.1`.
+A private, local-GPU stereoscopic image and video workflow. The hosted control surface runs in the browser, while the uploaded media and model inference stay on `127.0.0.1`.
 
 ## Run everything on localhost
 
@@ -29,8 +29,8 @@ On Linux or macOS, run `./start-local.sh`. To run only the local interface witho
    On the first run, add `-Reinstall` if the environment already exists but dependencies have not been installed. The first use of each model also downloads its weights to the normal Hugging Face cache.
 
 2. Leave the worker terminal open and open the private deployed Site.
-3. Upload a clip up to 90 seconds, choose a model and rendering method, then click **Generate stereo preview**.
-4. Preview or download the side-by-side MP4. Use **Compare depth models** on a representative frame before rendering a long clip.
+3. Upload a clip up to 90 seconds or a JPG, PNG, or WebP still image. Choose a model and rendering method, then generate the stereo result.
+4. Preview or download the side-by-side MP4/PNG. Use **Compare depth models** on a representative frame before committing to a full render.
 
 The worker binds only to `127.0.0.1`, accepts browser requests only from the private Site and local preview origins, limits processing to one render at a time, and removes old job files after two hours when a new job starts.
 
@@ -58,6 +58,7 @@ Depth inference is usually the main GPU cost. Point-cloud synthesis in this firs
 - **Depth strength** scales the inferred depth range without changing the model.
 - **Convergence** selects the zero-parallax depth plane. Values near 50% are a comfortable starting point.
 - **Temporal smoothing** blends each depth map with the prior frame. Increase it for static shots; reduce it for fast cuts or motion.
+- Temporal smoothing is automatically disabled for still images because there is no preceding frame.
 - **Resolution** is per eye. A 720p SBS frame is 2560×720; a 1080p SBS frame is 3840×1080.
 
 ## GPU notes
