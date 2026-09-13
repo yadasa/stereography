@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070a0f" />
+    <title>Stereo Depth Lab</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <header class="topbar shell">
+      <a class="brand" href="#top" aria-label="Stereo Depth Lab home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span><b>Stereo Depth</b><small>PRIVATE LAB / LOCAL GPU</small></span>
+      </a>
+      <div class="worker-pill" id="workerPill" data-state="offline">
+        <span class="status-dot"></span>
+        <span id="workerLabel">Local worker offline</span>
+        <button id="reconnectButton" type="button">Reconnect</button>
+      </div>
+    </header>
+
+    <main id="top" class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">MONOCULAR VIDEO → STEREOSCOPIC PAIR</p>
+          <h1>Shape the space<br />between <em>two eyes.</em></h1>
+        </div>
+        <p class="hero-copy">Infer relative depth frame by frame, stabilize it through time, then sculpt comfortable left/right views without uploading your footage.</p>
+      </section>
+
+      <section class="lab-grid panel" aria-labelledby="workspace-title">
+        <div class="source-column">
+          <div class="section-heading">
+            <div><span>01</span><h2 id="workspace-title">Source</h2></div>
+            <span class="privacy-chip">LOCAL-ONLY VIDEO</span>
+          </div>
+
+          <label class="dropzone" id="dropzone" for="videoInput">
+            <input id="videoInput" type="file" accept="video/mp4,video/webm,video/quicktime" />
+            <span class="upload-icon" aria-hidden="true">↗</span>
+            <strong id="dropTitle">Drop a short video here</strong>
+            <small id="dropMeta">MP4, MOV, or WebM · up to 90 seconds</small>
+          </label>
+
+          <div class="source-preview hidden" id="sourcePreview">
+            <video id="sourceVideo" controls playsinline muted></video>
+            <div class="file-strip">
+              <div><strong id="fileName">—</strong><small id="fileDetails">—</small></div>
+              <button id="replaceButton" type="button">Replace</button>
+            </div>
+          </div>
+
+          <button class="ghost-button compare-button" id="compareButton" type="button" disabled>
+            <span>Compare depth models</span><span>DA V2 ↔ MiDaS</span>
+          </button>
+        </div>
+
+        <aside class="controls-column">
+          <div class="section-heading">
+            <div><span>02</span><h2>Calibration</h2></div>
+            <button class="text-button" id="resetButton" type="button">Reset</button>
+          </div>
+
+          <fieldset>
+            <legend>Depth model</legend>
+            <div class="segmented" data-control="model">
+              <button type="button" data-value="depth-anything-v2-small" class="active">Depth Anything V2</button>
+              <button type="button" data-value="midas-hybrid">MiDaS Hybrid</button>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>View synthesis</legend>
+            <div class="segmented" data-control="renderMethod">
+              <button type="button" data-value="depth-warp" class="active">Depth warp</button>
+              <button type="button" data-value="point-cloud">Point cloud</button>
+            </div>
+          </fieldset>
+
+          <div class="range-stack">
+            <label><span>Eye separation <output id="eyeSeparationOut">28 px</output></span><input id="eyeSeparation" type="range" min="0" max="64" value="28" /></label>
+            <label><span>Depth strength <output id="depthStrengthOut">1.00×</output></span><input id="depthStrength" type="range" min="0" max="2" step="0.05" value="1" /></label>
+            <label><span>Convergence <output id="convergenceOut">50%</output></span><input id="convergence" type="range" min="0" max="100" value="50" /></label>
+            <label><span>Temporal smoothing <output id="smoothingOut">70%</output></span><input id="smoothing" type="range" min="0" max="95" value="70" /></label>
+          </div>
+
+          <div class="select-row">
+            <label>Output resolution<select id="resolution"><option value="720p">720p · Fast</option><option value="source">Source · Balanced</option><option value="1080p">1080p · Fine</option></select></label>
+            <label>Format<select id="format"><option value="sbs">Side-by-side</option></select></label>
+          </div>
+
+          <div class="comfort-meter"><span>Comfort estimate</span><div><i id="comfortBar"></i></div><output id="comfortLabel">Comfortable</output></div>
+
+          <button class="primary-button" id="processButton" type="button" disabled>
+            <span>Generate stereo preview</span><span aria-hidden="true">→</span>
+          </button>
+          <a class="worker-download" href="./downloads/stereo-depth-worker.zip" download>↓ Download local GPU worker (.zip)</a>
+          <p class="connection-note">The private site is the control surface. Download and start the local worker to enable GPU processing.</p>
+        </aside>
+      </section>
+
+      <section class="preview-panel panel" id="previewSection" aria-labelledby="preview-title">
+        <div class="section-heading preview-heading">
+          <div><span>03</span><h2 id="preview-title">Stereo preview</h2></div>
+          <div class="preview-actions"><a id="downloadButton" class="ghost-button disabled" download="stereo-sbs.mp4">Download MP4</a></div>
+        </div>
+
+        <div class="empty-preview" id="emptyPreview">
+          <div class="stereo-glyph"><i></i><i></i></div>
+          <strong>Your left/right render will appear here</strong>
+          <span>Upload a clip, connect the local worker, then generate.</span>
+        </div>
+
+        <div class="render-preview hidden" id="renderPreview">
+          <div class="eye-labels"><span>LEFT EYE</span><span>RIGHT EYE</span></div>
+          <video id="outputVideo" controls playsinline loop></video>
+        </div>
+
+        <div class="job-progress hidden" id="jobProgress">
+          <div><span id="progressLabel">Preparing frames…</span><strong id="progressValue">0%</strong></div>
+          <div class="progress-track"><i id="progressBar"></i></div>
+          <small id="progressDetail">The first run downloads the selected model once.</small>
+        </div>
+
+        <div class="comparison hidden" id="comparison">
+          <div class="comparison-copy"><p class="eyebrow">SAME FRAME / TWO MODELS</p><h3>Depth approach comparison</h3><p id="comparisonSummary">Inspect edge separation and depth continuity before committing to a full render.</p></div>
+          <article><div class="depth-image"><img id="depthAnythingImage" alt="Depth Anything V2 inferred depth" /><span>FAST DETAIL</span></div><h4>Depth Anything V2 Small</h4><p>Sharper subject edges and the best default for people, products, and mixed indoor footage.</p><small id="depthAnythingTime">—</small></article>
+          <article><div class="depth-image"><img id="midasImage" alt="MiDaS Hybrid inferred depth" /><span>ROBUST BASELINE</span></div><h4>MiDaS Hybrid</h4><p>A useful independent baseline for checking broad scene structure and failure cases.</p><small id="midasTime">—</small></article>
+        </div>
+      </section>
+
+      <section class="guidance-grid">
+        <div>
+          <p class="eyebrow">PRACTICAL TRADEOFF</p>
+          <h2>Choose the renderer for the shot.</h2>
+        </div>
+        <div class="method-card recommended"><header><span>DEPTH WARP</span><b>Recommended</b></header><h3>Fast iteration</h3><p>Inverse image warping is the smallest usable path: responsive, memory-light, and strong for modest parallax.</p><dl><div><dt>Best for</dt><dd>Preview, mobile, talking heads</dd></div><div><dt>Typical cost</dt><dd>~1× baseline</dd></div><div><dt>Watch for</dt><dd>Edge stretching at high separation</dd></div></dl></div>
+        <div class="method-card"><header><span>POINT CLOUD</span><b>Higher fidelity</b></header><h3>Occlusion-aware</h3><p>2.5D forward splatting respects foreground order and reveals gaps explicitly, then inpaints disocclusions.</p><dl><div><dt>Best for</dt><dd>Camera moves, stronger parallax</dd></div><div><dt>Typical cost</dt><dd>2–5× slower, more RAM</dd></div><div><dt>Watch for</dt><dd>Large holes and thin geometry</dd></div></dl></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
