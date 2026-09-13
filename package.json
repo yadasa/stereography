@@ -1,0 +1,10 @@
+{
+  "name": "stereo-depth-lab",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check frontend/app.js && node --check scripts/build.mjs"
+  }
+}
+
