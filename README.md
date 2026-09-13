@@ -2,9 +2,24 @@
 
 A private, local-GPU stereoscopic video workflow. The hosted control surface runs in the browser, while the actual video and model inference stay on `127.0.0.1`.
 
-## Smallest usable workflow
+## Run everything on localhost
 
-1. Download the **local GPU worker** from the private Site and unzip it. On Windows, open PowerShell in that folder and run:
+Clone the repository, then use the one-command launcher:
+
+```powershell
+git clone https://github.com/yadasa/stereography.git
+cd stereography
+Set-ExecutionPolicy -Scope Process Bypass
+.\start-local.ps1
+```
+
+This starts the GPU worker in a second PowerShell window and serves the interface at [http://127.0.0.1:4173](http://127.0.0.1:4173). Nothing is uploaded to OpenAI or another host in this mode.
+
+On Linux or macOS, run `./start-local.sh`. To run only the local interface without starting the model worker, use `npm run dev`.
+
+## Use the private hosted control surface
+
+1. Download the **complete local app** from the private Site and unzip it. On Windows, open PowerShell in that folder and run:
 
    ```powershell
    Set-ExecutionPolicy -Scope Process Bypass
