@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .models import MODEL_SPECS, DepthEngine
-from .pipeline import RenderSettings, process_video
+from .pipeline import RenderSettings, process_image, process_video
 
 
 LAB_ROOT = Path(os.getenv("STEREO_LAB_WORKDIR", Path.home() / ".stereo-lab")).resolve()
@@ -39,6 +39,7 @@ class Job:
     source_path: Path
     output_path: Path
     settings: RenderSettings
+    media_kind: str
     status: str = "queued"
     progress: float = 0.0
     stage: str = "Queued"
@@ -59,6 +60,7 @@ class Job:
             "created_at": self.created_at,
             "elapsed_seconds": self.elapsed_seconds,
             "settings": asdict(self.settings),
+            "media_kind": self.media_kind,
             **self.result,
         }
 
@@ -113,7 +115,8 @@ def _run_job(job: Job) -> None:
     try:
         with jobs_lock:
             job.status = "processing"
-        result = process_video(job.source_path, job.output_path, job.settings, engine, report)
+        processor = process_image if job.media_kind == "image" else process_video
+        result = processor(job.source_path, job.output_path, job.settings, engine, report)
         with jobs_lock:
             job.result = result
             job.elapsed_seconds = float(result["elapsed_seconds"])
@@ -152,7 +155,8 @@ def health() -> dict:
 
 @app.post("/api/jobs")
 async def create_job(
-    video: UploadFile = File(...),
+    media: UploadFile | None = File(None),
+    video: UploadFile | None = File(None),
     model: str = Form(...),
     render_method: str = Form(...),
     eye_separation: float = Form(...),
@@ -162,6 +166,9 @@ async def create_job(
     resolution: str = Form(...),
 ) -> dict:
     _cleanup_old_jobs()
+    upload = media or video
+    if upload is None:
+        raise HTTPException(422, "Upload a video or image.")
     if model not in MODEL_SPECS:
         raise HTTPException(422, "Choose a supported depth model.")
     if render_method not in {"depth-warp", "point-cloud"}:
@@ -176,19 +183,31 @@ async def create_job(
         raise HTTPException(422, "Convergence or smoothing is outside its safe range.")
     with jobs_lock:
         if _active_jobs() >= MAX_ACTIVE_JOBS:
-            raise HTTPException(409, "The local GPU is already processing a video.")
+            raise HTTPException(409, "The local GPU is already processing another file.")
 
     job_id = uuid.uuid4().hex
     directory = LAB_ROOT / job_id
     directory.mkdir(parents=True, exist_ok=False)
-    suffix = Path(video.filename or "source.mp4").suffix.lower()
-    if suffix not in {".mp4", ".mov", ".webm", ".m4v", ".avi"}:
-        suffix = ".mp4"
+    suffix = Path(upload.filename or "source.mp4").suffix.lower()
+    image_suffixes = {".jpg", ".jpeg", ".png", ".webp"}
+    video_suffixes = {".mp4", ".mov", ".webm", ".m4v", ".avi"}
+    content_type = (upload.content_type or "").lower()
+    if suffix in image_suffixes or content_type.startswith("image/"):
+        media_kind = "image"
+        if suffix not in image_suffixes:
+            suffix = ".png"
+    elif suffix in video_suffixes or content_type.startswith("video/"):
+        media_kind = "video"
+        if suffix not in video_suffixes:
+            suffix = ".mp4"
+    else:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(422, "Choose an MP4, MOV, WebM, JPG, PNG, or WebP file.")
     source_path = directory / f"source{suffix}"
     written = 0
     try:
         with source_path.open("wb") as destination:
-            while chunk := await video.read(1024 * 1024):
+            while chunk := await upload.read(1024 * 1024):
                 written += len(chunk)
                 if written > MAX_UPLOAD_BYTES:
                     raise HTTPException(413, "Keep the local source under 512 MB.")
@@ -197,7 +216,7 @@ async def create_job(
         shutil.rmtree(directory, ignore_errors=True)
         raise
     finally:
-        await video.close()
+        await upload.close()
 
     settings = RenderSettings(
         model=model,
@@ -208,7 +227,8 @@ async def create_job(
         temporal_smoothing=temporal_smoothing,
         resolution=resolution,
     )
-    job = Job(job_id, directory, source_path, directory / "stereo-sbs.mp4", settings)
+    output_path = directory / ("stereo-sbs.png" if media_kind == "image" else "stereo-sbs.mp4")
+    job = Job(job_id, directory, source_path, output_path, settings, media_kind)
     with jobs_lock:
         jobs[job_id] = job
     threading.Thread(target=_run_job, args=(job,), daemon=True, name=f"stereo-job-{job_id[:8]}").start()
@@ -230,7 +250,9 @@ def get_output(job_id: str):
         raise HTTPException(404, "Render job not found.")
     if job.status != "complete" or not job.output_path.exists():
         raise HTTPException(409, "The render is not complete.")
-    return FileResponse(job.output_path, media_type="video/mp4", filename="stereo-sbs.mp4")
+    media_type = str(job.result.get("media_type", "application/octet-stream"))
+    filename = "stereo-sbs.png" if job.media_kind == "image" else "stereo-sbs.mp4"
+    return FileResponse(job.output_path, media_type=media_type, filename=filename)
 
 
 @app.post("/api/compare")
