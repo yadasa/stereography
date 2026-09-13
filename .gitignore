@@ -1,0 +1,10 @@
+.venv/
+.venv-test/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.stereo-lab/
+.stereo-lab-test/
+dist/
+*.mp4
+*.webm
