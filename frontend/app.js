@@ -348,4 +348,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 resetControls();
+if (["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+  $("#connectionNote").textContent = "Fully local mode: both the interface and GPU worker are running on this machine.";
+}
 checkWorker();
