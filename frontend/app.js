@@ -7,22 +7,25 @@ const els = {
   workerPill: $("#workerPill"),
   workerLabel: $("#workerLabel"),
   reconnect: $("#reconnectButton"),
-  input: $("#videoInput"),
+  input: $("#mediaInput"),
   dropzone: $("#dropzone"),
   dropTitle: $("#dropTitle"),
   dropMeta: $("#dropMeta"),
   sourcePreview: $("#sourcePreview"),
   sourceVideo: $("#sourceVideo"),
+  sourceImage: $("#sourceImage"),
   fileName: $("#fileName"),
   fileDetails: $("#fileDetails"),
   replace: $("#replaceButton"),
   compare: $("#compareButton"),
   reset: $("#resetButton"),
   process: $("#processButton"),
+  processLabel: $("#processLabel"),
   resolution: $("#resolution"),
   emptyPreview: $("#emptyPreview"),
   renderPreview: $("#renderPreview"),
   outputVideo: $("#outputVideo"),
+  outputImage: $("#outputImage"),
   download: $("#downloadButton"),
   progress: $("#jobProgress"),
   progressLabel: $("#progressLabel"),
@@ -36,6 +39,7 @@ const els = {
   midasTime: $("#midasTime"),
   comfortBar: $("#comfortBar"),
   comfortLabel: $("#comfortLabel"),
+  smoothingControl: $("#smoothingControl"),
   toast: $("#toast"),
 };
 
@@ -62,6 +66,7 @@ let state = {
   outputUrl: null,
   workerOnline: false,
   processing: false,
+  mediaKind: null,
   model: defaults.model,
   renderMethod: defaults.renderMethod,
 };
@@ -160,42 +165,74 @@ function resetControls() {
 
 function loadFile(file) {
   if (!file) return;
-  if (!file.type.startsWith("video/")) return toast("Choose an MP4, MOV, or WebM video.", true);
+  const mediaKind = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
+  if (!mediaKind) return toast("Choose an MP4, MOV, WebM, JPG, PNG, or WebP file.", true);
   if (file.size > 512 * 1024 * 1024) return toast("Keep this first workflow under 512 MB.", true);
   if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
   state.file = file;
+  state.mediaKind = mediaKind;
   state.sourceUrl = URL.createObjectURL(file);
-  els.sourceVideo.src = state.sourceUrl;
-  els.sourceVideo.load();
   els.dropzone.classList.add("hidden");
   els.sourcePreview.classList.remove("hidden");
   els.fileName.textContent = file.name;
   els.fileDetails.textContent = readableBytes(file.size);
-  els.sourceVideo.onloadedmetadata = () => {
-    if (els.sourceVideo.duration > 90) {
-      toast("This local-first version accepts clips up to 90 seconds. Trim the source and try again.", true);
-      clearFile();
-      return;
-    }
-    els.fileDetails.textContent = `${readableBytes(file.size)} · ${readableTime(els.sourceVideo.duration)} · ${els.sourceVideo.videoWidth}×${els.sourceVideo.videoHeight}`;
-  };
+  els.sourceVideo.classList.toggle("hidden", mediaKind !== "video");
+  els.sourceImage.classList.toggle("hidden", mediaKind !== "image");
+  els.processLabel.textContent = mediaKind === "image" ? "Generate stereo image" : "Generate stereo preview";
+  controls.smoothing.disabled = mediaKind === "image";
+  els.smoothingControl.classList.toggle("inactive", mediaKind === "image");
+  els.smoothingControl.title = mediaKind === "image" ? "Temporal smoothing applies only to video." : "";
+
+  if (mediaKind === "video") {
+    els.sourceImage.removeAttribute("src");
+    els.sourceVideo.src = state.sourceUrl;
+    els.sourceVideo.load();
+    els.sourceVideo.onloadedmetadata = () => {
+      if (els.sourceVideo.duration > 90) {
+        toast("This local-first version accepts clips up to 90 seconds. Trim the source and try again.", true);
+        clearFile();
+        return;
+      }
+      els.fileDetails.textContent = `${readableBytes(file.size)} · ${readableTime(els.sourceVideo.duration)} · ${els.sourceVideo.videoWidth}×${els.sourceVideo.videoHeight}`;
+    };
+  } else {
+    els.sourceVideo.pause();
+    els.sourceVideo.removeAttribute("src");
+    els.sourceImage.src = state.sourceUrl;
+    els.sourceImage.onload = () => {
+      const pixels = els.sourceImage.naturalWidth * els.sourceImage.naturalHeight;
+      if (pixels > 50_000_000) {
+        toast("Keep still images under 50 megapixels for this workflow.", true);
+        clearFile();
+        return;
+      }
+      els.fileDetails.textContent = `${readableBytes(file.size)} · STILL · ${els.sourceImage.naturalWidth}×${els.sourceImage.naturalHeight}`;
+    };
+  }
   updateActions();
 }
 
 function clearFile() {
   state.file = null;
+  state.mediaKind = null;
   if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
   state.sourceUrl = null;
   els.sourceVideo.removeAttribute("src");
+  els.sourceImage.removeAttribute("src");
+  els.sourceVideo.classList.remove("hidden");
+  els.sourceImage.classList.add("hidden");
   els.sourcePreview.classList.add("hidden");
   els.dropzone.classList.remove("hidden");
   els.input.value = "";
+  els.processLabel.textContent = "Generate stereo preview";
+  controls.smoothing.disabled = false;
+  els.smoothingControl.classList.remove("inactive");
   updateActions();
 }
 
 function settingsForm() {
   const data = new FormData();
-  data.append("video", state.file, state.file.name);
+  data.append("media", state.file, state.file.name);
   data.append("model", state.model);
   data.append("render_method", state.renderMethod);
   data.append("eye_separation", controls.eyeSeparation.value);
@@ -248,12 +285,24 @@ async function processVideo() {
     const output = await fetch(`${WORKER_URL}/api/jobs/${id}/output`);
     if (!output.ok) throw new Error("The render finished, but the output could not be loaded.");
     state.outputUrl = URL.createObjectURL(await output.blob());
-    els.outputVideo.src = state.outputUrl;
+    const outputKind = result.output_kind || state.mediaKind;
+    els.outputVideo.classList.toggle("hidden", outputKind !== "video");
+    els.outputImage.classList.toggle("hidden", outputKind !== "image");
+    if (outputKind === "image") {
+      els.outputVideo.pause();
+      els.outputVideo.removeAttribute("src");
+      els.outputImage.src = state.outputUrl;
+      els.download.download = "stereo-sbs.png";
+    } else {
+      els.outputImage.removeAttribute("src");
+      els.outputVideo.src = state.outputUrl;
+      els.download.download = "stereo-sbs.mp4";
+    }
     els.download.href = state.outputUrl;
     els.download.classList.remove("disabled");
     els.progress.classList.add("hidden");
     els.renderPreview.classList.remove("hidden");
-    els.outputVideo.play().catch(() => {});
+    if (outputKind === "video") els.outputVideo.play().catch(() => {});
     toast(`Stereo render complete in ${result.elapsed_seconds.toFixed(1)}s.`);
   } catch (error) {
     els.progress.classList.add("hidden");
@@ -267,6 +316,16 @@ async function processVideo() {
 }
 
 async function captureFrame() {
+  if (state.mediaKind === "image") {
+    const image = els.sourceImage;
+    if (!image.naturalWidth) throw new Error("Wait for the image preview to load.");
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 960 / image.naturalWidth);
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not sample this image.")), "image/jpeg", 0.9));
+  }
   const video = els.sourceVideo;
   if (!video.videoWidth) throw new Error("Wait for the video preview to load.");
   if (video.readyState < 2) await new Promise((resolve) => video.addEventListener("loadeddata", resolve, { once: true }));
