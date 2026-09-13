@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from worker.models import DepthEngine
-from worker.pipeline import RenderSettings, depth_warp, point_cloud_warp, process_video
+from worker.pipeline import RenderSettings, depth_warp, point_cloud_warp, process_image, process_video
 
 
 class StereoPipelineTests(unittest.TestCase):
@@ -57,7 +57,22 @@ class StereoPipelineTests(unittest.TestCase):
             self.assertEqual(result["width_per_eye"], 128)
             self.assertEqual(events[-1][0], 1.0)
 
+    def test_still_image_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.png"
+            output = root / "stereo.png"
+            self.assertTrue(cv2.imwrite(str(source), self.frame))
+
+            events = []
+            result = process_image(source, output, self.settings, DepthEngine(), lambda *args: events.append(args))
+            rendered = cv2.imread(str(output), cv2.IMREAD_COLOR)
+            self.assertIsNotNone(rendered)
+            self.assertEqual(rendered.shape, (72, 256, 3))
+            self.assertEqual(result["output_kind"], "image")
+            self.assertEqual(result["frames"], 1)
+            self.assertEqual(events[-1][0], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()
-
