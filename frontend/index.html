@@ -38,15 +38,16 @@
             <span class="privacy-chip">LOCAL-ONLY VIDEO</span>
           </div>
 
-          <label class="dropzone" id="dropzone" for="videoInput">
-            <input id="videoInput" type="file" accept="video/mp4,video/webm,video/quicktime" />
+          <label class="dropzone" id="dropzone" for="mediaInput">
+            <input id="mediaInput" type="file" accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp" />
             <span class="upload-icon" aria-hidden="true">↗</span>
-            <strong id="dropTitle">Drop a short video here</strong>
-            <small id="dropMeta">MP4, MOV, or WebM · up to 90 seconds</small>
+            <strong id="dropTitle">Drop a video or image here</strong>
+            <small id="dropMeta">MP4, MOV, WebM, JPG, PNG, or WebP</small>
           </label>
 
           <div class="source-preview hidden" id="sourcePreview">
             <video id="sourceVideo" controls playsinline muted></video>
+            <img id="sourceImage" class="hidden" alt="Uploaded source" />
             <div class="file-strip">
               <div><strong id="fileName">—</strong><small id="fileDetails">—</small></div>
               <button id="replaceButton" type="button">Replace</button>
@@ -84,7 +85,7 @@
             <label><span>Eye separation <output id="eyeSeparationOut">28 px</output></span><input id="eyeSeparation" type="range" min="0" max="64" value="28" /></label>
             <label><span>Depth strength <output id="depthStrengthOut">1.00×</output></span><input id="depthStrength" type="range" min="0" max="2" step="0.05" value="1" /></label>
             <label><span>Convergence <output id="convergenceOut">50%</output></span><input id="convergence" type="range" min="0" max="100" value="50" /></label>
-            <label><span>Temporal smoothing <output id="smoothingOut">70%</output></span><input id="smoothing" type="range" min="0" max="95" value="70" /></label>
+            <label id="smoothingControl"><span>Temporal smoothing <output id="smoothingOut">70%</output></span><input id="smoothing" type="range" min="0" max="95" value="70" /></label>
           </div>
 
           <div class="select-row">
@@ -95,7 +96,7 @@
           <div class="comfort-meter"><span>Comfort estimate</span><div><i id="comfortBar"></i></div><output id="comfortLabel">Comfortable</output></div>
 
           <button class="primary-button" id="processButton" type="button" disabled>
-            <span>Generate stereo preview</span><span aria-hidden="true">→</span>
+            <span id="processLabel">Generate stereo preview</span><span aria-hidden="true">→</span>
           </button>
           <a class="worker-download" href="./downloads/stereo-depth-worker.zip" download>↓ Download complete local app (.zip)</a>
           <p class="connection-note" id="connectionNote">This control surface talks directly to the local GPU worker on your machine.</p>
@@ -111,12 +112,13 @@
         <div class="empty-preview" id="emptyPreview">
           <div class="stereo-glyph"><i></i><i></i></div>
           <strong>Your left/right render will appear here</strong>
-          <span>Upload a clip, connect the local worker, then generate.</span>
+          <span>Upload a video or image, connect the local worker, then generate.</span>
         </div>
 
         <div class="render-preview hidden" id="renderPreview">
           <div class="eye-labels"><span>LEFT EYE</span><span>RIGHT EYE</span></div>
           <video id="outputVideo" controls playsinline loop></video>
+          <img id="outputImage" class="hidden" alt="Generated side-by-side stereoscopic output" />
         </div>
 
         <div class="job-progress hidden" id="jobProgress">
