@@ -188,10 +188,51 @@ def process_video(
     elapsed = time.perf_counter() - started
     progress(1.0, "Complete", f"{processed} frames rendered locally in {elapsed:.1f}s.")
     return {
+        "output_kind": "video",
+        "media_type": "video/mp4",
         "elapsed_seconds": elapsed,
         "frames": processed,
         "fps": fps,
         "width_per_eye": target_width,
         "height": target_height,
         "average_inference_ms": inference_ms / processed,
+    }
+
+
+def process_image(
+    source_path: Path,
+    output_path: Path,
+    settings: RenderSettings,
+    engine: DepthEngine,
+    progress: ProgressCallback,
+) -> dict[str, float | int | str]:
+    started = time.perf_counter()
+    frame = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise ValueError("OpenCV could not decode this image. Try a JPG, PNG, or WebP file.")
+    height, width = frame.shape[:2]
+    if width * height > 50_000_000:
+        raise ValueError("Keep still images under 50 megapixels for this workflow.")
+
+    target_width, target_height = _target_size(width, height, settings.resolution)
+    if (width, height) != (target_width, target_height):
+        frame = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_AREA)
+
+    progress(0.12, "Inferring image depth…", f"{settings.model} · {target_width}×{target_height}")
+    depth, inference_ms = engine.infer(frame, settings.model)
+    progress(0.68, "Synthesizing eye views…", f"{settings.render_method} · {target_width}×{target_height} per eye")
+    stereo = stereo_frame(frame, depth, settings)
+    if not cv2.imwrite(str(output_path), stereo, [cv2.IMWRITE_PNG_COMPRESSION, 3]):
+        raise RuntimeError("Could not encode the stereoscopic PNG.")
+
+    elapsed = time.perf_counter() - started
+    progress(1.0, "Complete", f"Stereo image rendered locally in {elapsed:.1f}s.")
+    return {
+        "output_kind": "image",
+        "media_type": "image/png",
+        "elapsed_seconds": elapsed,
+        "frames": 1,
+        "width_per_eye": target_width,
+        "height": target_height,
+        "average_inference_ms": inference_ms,
     }
