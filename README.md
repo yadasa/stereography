@@ -49,8 +49,11 @@ Both estimate relative monocular depth. They do not recover metric camera distan
 | --- | --- | --- |
 | Depth warp | Inverse-remaps each eye from the source using a disparity field | Start here. Roughly baseline memory, fast OpenCV remap, few holes, best for previews and moderate separation. It can stretch boundaries where hidden background should be revealed. |
 | Point cloud | Treats each pixel as a 2.5D sample, forward-splats it with a depth-aware visibility order, then inpaints holes | Use for stronger parallax or foreground crossings. Expect about 2–5× the synthesis cost and significantly more transient RAM. Calibrate at 720p before a final 1080p render. Large disocclusions still require a generative inpainting stage for production quality. |
+| 4D Gaussian Lite | Seeds screen-space Gaussians from monocular depth, advects persistent Gaussians with optical flow, applies temporal confidence/decay, and rasterizes anisotropic eye views with depth-weighted visibility | Best local option for moving subjects and temporally stable depth. Expect roughly 2–4× the synthesis cost plus optical-flow memory. Calibrate at 720p. Hard cuts reset history automatically. |
 
-Depth inference is usually the main GPU cost. Point-cloud synthesis in this first version is CPU/NumPy-based so it remains easy to inspect and later replace with a CUDA splat kernel.
+Depth inference is usually the main GPU cost. Point-cloud and Gaussian synthesis in this version are CPU/NumPy/OpenCV-based so they remain easy to inspect and can later be replaced with CUDA rasterizers.
+
+**4D Gaussian Lite is not a trained, calibrated multi-view 4DGS reconstruction.** It is the practical monocular preview path: each frame supplies depth-seeded spatial Gaussians, and prior Gaussians persist through the time dimension using optical flow and confidence. Full MoSca/4DGS integration requires a dedicated research environment, scene optimization, camera/depth preprocessing, and materially longer turnaround. See [`docs/4d-gaussian-research.md`](docs/4d-gaussian-research.md).
 
 ## Controls
 
@@ -58,6 +61,8 @@ Depth inference is usually the main GPU cost. Point-cloud synthesis in this firs
 - **Depth strength** scales the inferred depth range without changing the model.
 - **Convergence** selects the zero-parallax depth plane. Values near 50% are a comfortable starting point.
 - **Temporal smoothing** blends each depth map with the prior frame. Increase it for static shots; reduce it for fast cuts or motion.
+- In 4D Gaussian Lite mode, temporal smoothing also controls the temporal covariance and persistence of advected Gaussians.
+- **Gaussian radius** controls the anisotropic screen-space footprint. Start around 1.35 px; increase it to fill small holes, or decrease it to preserve fine edges.
 - Temporal smoothing is automatically disabled for still images because there is no preceding frame.
 - **Resolution** is per eye. A 720p SBS frame is 2560×720; a 1080p SBS frame is 3840×1080.
 
