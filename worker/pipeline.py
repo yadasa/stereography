@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from .models import DepthEngine
+from .gaussian4d import TemporalGaussianRenderer
 
 
 ProgressCallback = Callable[[float, str, str], None]
@@ -25,6 +26,7 @@ class RenderSettings:
     convergence: float
     temporal_smoothing: float
     resolution: str
+    gaussian_scale: float = 1.35
 
 
 def _target_size(width: int, height: int, preset: str) -> tuple[int, int]:
@@ -89,11 +91,29 @@ def point_cloud_warp(frame: np.ndarray, depth: np.ndarray, settings: RenderSetti
     return _forward_splat(frame, depth, -shift), _forward_splat(frame, depth, shift)
 
 
-def stereo_frame(frame: np.ndarray, depth: np.ndarray, settings: RenderSettings) -> np.ndarray:
+def _gaussian_renderer(settings: RenderSettings) -> TemporalGaussianRenderer:
+    return TemporalGaussianRenderer(
+        gaussian_scale=settings.gaussian_scale,
+        temporal_smoothing=settings.temporal_smoothing,
+        eye_separation=settings.eye_separation,
+        depth_strength=settings.depth_strength,
+        convergence=settings.convergence,
+    )
+
+
+def stereo_frame(
+    frame: np.ndarray,
+    depth: np.ndarray,
+    settings: RenderSettings,
+    gaussian_renderer: TemporalGaussianRenderer | None = None,
+) -> np.ndarray:
     if settings.render_method == "depth-warp":
         left, right = depth_warp(frame, depth, settings)
     elif settings.render_method == "point-cloud":
         left, right = point_cloud_warp(frame, depth, settings)
+    elif settings.render_method == "gaussian-4d":
+        renderer = gaussian_renderer or _gaussian_renderer(settings)
+        left, right = renderer.render(frame, depth, _disparity(depth, settings))
     else:
         raise ValueError(f"Unsupported rendering method: {settings.render_method}")
     return np.concatenate((left, right), axis=1)
@@ -151,8 +171,11 @@ def process_video(
         raise RuntimeError("Could not initialize the local MP4 encoder.")
 
     previous_depth: np.ndarray | None = None
+    gaussian_renderer = _gaussian_renderer(settings) if settings.render_method == "gaussian-4d" else None
     processed = 0
     inference_ms = 0.0
+    temporal_reuse = 0.0
+    gaussian_count = 0
     try:
         while True:
             ok, frame = capture.read()
@@ -168,7 +191,10 @@ def process_video(
                     + (1.0 - settings.temporal_smoothing) * depth
                 ).astype(np.float32)
             previous_depth = depth
-            writer.write(stereo_frame(frame, depth, settings))
+            writer.write(stereo_frame(frame, depth, settings, gaussian_renderer))
+            if gaussian_renderer is not None:
+                temporal_reuse += gaussian_renderer.last_temporal_reuse
+                gaussian_count += gaussian_renderer.last_gaussian_count
             processed += 1
             ratio = processed / max(frame_count, processed)
             progress(
@@ -187,7 +213,7 @@ def process_video(
     silent_path.unlink(missing_ok=True)
     elapsed = time.perf_counter() - started
     progress(1.0, "Complete", f"{processed} frames rendered locally in {elapsed:.1f}s.")
-    return {
+    result = {
         "output_kind": "video",
         "media_type": "video/mp4",
         "elapsed_seconds": elapsed,
@@ -197,6 +223,13 @@ def process_video(
         "height": target_height,
         "average_inference_ms": inference_ms / processed,
     }
+    if gaussian_renderer is not None:
+        result.update({
+            "average_gaussians_per_frame": int(gaussian_count / processed),
+            "average_temporal_reuse_pct": temporal_reuse / processed * 100.0,
+            "gaussian_mode": "monocular-4d-lite",
+        })
+    return result
 
 
 def process_image(
@@ -221,13 +254,14 @@ def process_image(
     progress(0.12, "Inferring image depth…", f"{settings.model} · {target_width}×{target_height}")
     depth, inference_ms = engine.infer(frame, settings.model)
     progress(0.68, "Synthesizing eye views…", f"{settings.render_method} · {target_width}×{target_height} per eye")
-    stereo = stereo_frame(frame, depth, settings)
+    gaussian_renderer = _gaussian_renderer(settings) if settings.render_method == "gaussian-4d" else None
+    stereo = stereo_frame(frame, depth, settings, gaussian_renderer)
     if not cv2.imwrite(str(output_path), stereo, [cv2.IMWRITE_PNG_COMPRESSION, 3]):
         raise RuntimeError("Could not encode the stereoscopic PNG.")
 
     elapsed = time.perf_counter() - started
     progress(1.0, "Complete", f"Stereo image rendered locally in {elapsed:.1f}s.")
-    return {
+    result = {
         "output_kind": "image",
         "media_type": "image/png",
         "elapsed_seconds": elapsed,
@@ -236,3 +270,10 @@ def process_image(
         "height": target_height,
         "average_inference_ms": inference_ms,
     }
+    if gaussian_renderer is not None:
+        result.update({
+            "average_gaussians_per_frame": gaussian_renderer.last_gaussian_count,
+            "average_temporal_reuse_pct": 0.0,
+            "gaussian_mode": "single-frame-gaussian",
+        })
+    return result
