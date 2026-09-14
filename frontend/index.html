@@ -25,7 +25,7 @@
     <main id="top" class="shell">
       <section class="hero">
         <div>
-          <p class="eyebrow">MONOCULAR VIDEO → STEREOSCOPIC PAIR</p>
+          <p class="eyebrow">MONOCULAR MEDIA → SPATIOTEMPORAL STEREO</p>
           <h1>Shape the space<br />between <em>two eyes.</em></h1>
         </div>
         <p class="hero-copy">Infer relative depth frame by frame, stabilize it through time, then sculpt comfortable left/right views without uploading your footage.</p>
@@ -35,7 +35,7 @@
         <div class="source-column">
           <div class="section-heading">
             <div><span>01</span><h2 id="workspace-title">Source</h2></div>
-            <span class="privacy-chip">LOCAL-ONLY VIDEO</span>
+            <span class="privacy-chip">LOCAL-ONLY MEDIA</span>
           </div>
 
           <label class="dropzone" id="dropzone" for="mediaInput">
@@ -75,9 +75,10 @@
 
           <fieldset>
             <legend>View synthesis</legend>
-            <div class="segmented" data-control="renderMethod">
+            <div class="segmented three" data-control="renderMethod">
               <button type="button" data-value="depth-warp" class="active">Depth warp</button>
               <button type="button" data-value="point-cloud">Point cloud</button>
+              <button type="button" data-value="gaussian-4d">4D Gaussian Lite</button>
             </div>
           </fieldset>
 
@@ -86,6 +87,7 @@
             <label><span>Depth strength <output id="depthStrengthOut">1.00×</output></span><input id="depthStrength" type="range" min="0" max="2" step="0.05" value="1" /></label>
             <label><span>Convergence <output id="convergenceOut">50%</output></span><input id="convergence" type="range" min="0" max="100" value="50" /></label>
             <label id="smoothingControl"><span>Temporal smoothing <output id="smoothingOut">70%</output></span><input id="smoothing" type="range" min="0" max="95" value="70" /></label>
+            <label id="gaussianControl" class="inactive"><span>Gaussian radius <output id="gaussianScaleOut">1.35 px</output></span><input id="gaussianScale" type="range" min="0.55" max="3" step="0.05" value="1.35" disabled /></label>
           </div>
 
           <div class="select-row">
@@ -141,6 +143,7 @@
         </div>
         <div class="method-card recommended"><header><span>DEPTH WARP</span><b>Recommended</b></header><h3>Fast iteration</h3><p>Inverse image warping is the smallest usable path: responsive, memory-light, and strong for modest parallax.</p><dl><div><dt>Best for</dt><dd>Preview, mobile, talking heads</dd></div><div><dt>Typical cost</dt><dd>~1× baseline</dd></div><div><dt>Watch for</dt><dd>Edge stretching at high separation</dd></div></dl></div>
         <div class="method-card"><header><span>POINT CLOUD</span><b>Higher fidelity</b></header><h3>Occlusion-aware</h3><p>2.5D forward splatting respects foreground order and reveals gaps explicitly, then inpaints disocclusions.</p><dl><div><dt>Best for</dt><dd>Camera moves, stronger parallax</dd></div><div><dt>Typical cost</dt><dd>2–5× slower, more RAM</dd></div><div><dt>Watch for</dt><dd>Large holes and thin geometry</dd></div></dl></div>
+        <div class="method-card gaussian-card"><header><span>4D GAUSSIAN LITE</span><b>Temporal 3D</b></header><h3>Persistent motion</h3><p>Depth-seeded Gaussians move through time with optical flow, confidence decay, anisotropic footprints, and near-first visibility weighting.</p><dl><div><dt>Best for</dt><dd>Moving subjects, stable depth</dd></div><div><dt>Typical cost</dt><dd>2–4× synthesis, more RAM</dd></div><div><dt>Watch for</dt><dd>Hard cuts and extreme motion</dd></div></dl></div>
       </section>
     </main>
 
