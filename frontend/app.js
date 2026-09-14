@@ -40,6 +40,7 @@ const els = {
   comfortBar: $("#comfortBar"),
   comfortLabel: $("#comfortLabel"),
   smoothingControl: $("#smoothingControl"),
+  gaussianControl: $("#gaussianControl"),
   toast: $("#toast"),
 };
 
@@ -48,6 +49,7 @@ const controls = {
   depthStrength: $("#depthStrength"),
   convergence: $("#convergence"),
   smoothing: $("#smoothing"),
+  gaussianScale: $("#gaussianScale"),
 };
 
 const defaults = {
@@ -55,6 +57,7 @@ const defaults = {
   depthStrength: 1,
   convergence: 50,
   smoothing: 70,
+  gaussianScale: 1.35,
   resolution: "720p",
   model: "depth-anything-v2-small",
   renderMethod: "depth-warp",
@@ -129,6 +132,7 @@ function updateRange(input) {
   const output = $(`#${input.id}Out`);
   if (input.id === "eyeSeparation") output.value = `${value} px`;
   if (input.id === "depthStrength") output.value = `${value.toFixed(2)}×`;
+  if (input.id === "gaussianScale") output.value = `${value.toFixed(2)} px`;
   if (input.id === "convergence" || input.id === "smoothing") output.value = `${value}%`;
   updateComfort();
 }
@@ -161,6 +165,14 @@ function resetControls() {
     const key = group.dataset.control;
     group.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.value === state[key]));
   });
+  updateMethodUI();
+}
+
+function updateMethodUI() {
+  const gaussianActive = state.renderMethod === "gaussian-4d";
+  controls.gaussianScale.disabled = !gaussianActive;
+  els.gaussianControl.classList.toggle("inactive", !gaussianActive);
+  els.gaussianControl.title = gaussianActive ? "Projected Gaussian footprint in output pixels." : "Available in 4D Gaussian Lite mode.";
 }
 
 function loadFile(file) {
@@ -239,6 +251,7 @@ function settingsForm() {
   data.append("depth_strength", controls.depthStrength.value);
   data.append("convergence", String(Number(controls.convergence.value) / 100));
   data.append("temporal_smoothing", String(Number(controls.smoothing.value) / 100));
+  data.append("gaussian_scale", controls.gaussianScale.value);
   data.append("resolution", els.resolution.value);
   return data;
 }
@@ -303,7 +316,10 @@ async function processVideo() {
     els.progress.classList.add("hidden");
     els.renderPreview.classList.remove("hidden");
     if (outputKind === "video") els.outputVideo.play().catch(() => {});
-    toast(`Stereo render complete in ${result.elapsed_seconds.toFixed(1)}s.`);
+    const gaussianDetail = result.gaussian_mode && state.mediaKind === "video"
+      ? ` · ${result.average_temporal_reuse_pct.toFixed(0)}% temporal reuse`
+      : "";
+    toast(`Stereo render complete in ${result.elapsed_seconds.toFixed(1)}s${gaussianDetail}.`);
   } catch (error) {
     els.progress.classList.add("hidden");
     els.emptyPreview.classList.remove("hidden");
@@ -377,7 +393,8 @@ $$('.segmented').forEach((group) => {
     if (!button) return;
     group.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
     state[group.dataset.control] = button.dataset.value;
-    if (state.renderMethod === "point-cloud" && els.resolution.value === "1080p") toast("Point-cloud mode at 1080p is accurate but substantially slower. Start with 720p for calibration.");
+    updateMethodUI();
+    if (["point-cloud", "gaussian-4d"].includes(state.renderMethod) && els.resolution.value === "1080p") toast("This renderer is substantially heavier at 1080p. Start with 720p for calibration.");
   });
 });
 
@@ -388,7 +405,7 @@ els.reset.addEventListener("click", resetControls);
 els.process.addEventListener("click", processVideo);
 els.compare.addEventListener("click", compareModels);
 els.resolution.addEventListener("change", () => {
-  if (state.renderMethod === "point-cloud" && els.resolution.value === "1080p") toast("For point-cloud mode, 720p is the practical calibration resolution before a final 1080p render.");
+  if (["point-cloud", "gaussian-4d"].includes(state.renderMethod) && els.resolution.value === "1080p") toast("Use 720p to calibrate this renderer before a final 1080p render.");
 });
 
 ["dragenter", "dragover"].forEach((name) => els.dropzone.addEventListener(name, (event) => {
