@@ -150,6 +150,7 @@ def health() -> dict:
         "models": [asdict(spec) for spec in MODEL_SPECS.values()],
         "loaded_models": engine.loaded_models,
         "active_jobs": _active_jobs(),
+        "renderers": ["depth-warp", "point-cloud", "gaussian-4d"],
     }
 
 
@@ -164,6 +165,7 @@ async def create_job(
     convergence: float = Form(...),
     temporal_smoothing: float = Form(...),
     resolution: str = Form(...),
+    gaussian_scale: float = Form(1.35),
 ) -> dict:
     _cleanup_old_jobs()
     upload = media or video
@@ -171,7 +173,7 @@ async def create_job(
         raise HTTPException(422, "Upload a video or image.")
     if model not in MODEL_SPECS:
         raise HTTPException(422, "Choose a supported depth model.")
-    if render_method not in {"depth-warp", "point-cloud"}:
+    if render_method not in {"depth-warp", "point-cloud", "gaussian-4d"}:
         raise HTTPException(422, "Choose a supported view-synthesis method.")
     if resolution not in {"720p", "1080p", "source"}:
         raise HTTPException(422, "Choose 720p, 1080p, or source resolution.")
@@ -181,6 +183,8 @@ async def create_job(
         raise HTTPException(422, "Depth strength must be between 0 and 2.")
     if not 0 <= convergence <= 1 or not 0 <= temporal_smoothing <= 0.95:
         raise HTTPException(422, "Convergence or smoothing is outside its safe range.")
+    if not 0.55 <= gaussian_scale <= 3.0:
+        raise HTTPException(422, "Gaussian scale must be between 0.55 and 3.0 pixels.")
     with jobs_lock:
         if _active_jobs() >= MAX_ACTIVE_JOBS:
             raise HTTPException(409, "The local GPU is already processing another file.")
@@ -226,6 +230,7 @@ async def create_job(
         convergence=convergence,
         temporal_smoothing=temporal_smoothing,
         resolution=resolution,
+        gaussian_scale=gaussian_scale,
     )
     output_path = directory / ("stereo-sbs.png" if media_kind == "image" else "stereo-sbs.mp4")
     job = Job(job_id, directory, source_path, output_path, settings, media_kind)
