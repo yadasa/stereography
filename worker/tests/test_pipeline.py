@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 os.environ["STEREO_LAB_FAKE_MODEL"] = "1"
@@ -11,6 +12,7 @@ import cv2
 import numpy as np
 
 from worker.models import DepthEngine
+from worker.gaussian4d import TemporalGaussianRenderer
 from worker.pipeline import RenderSettings, depth_warp, point_cloud_warp, process_image, process_video
 
 
@@ -36,6 +38,26 @@ class StereoPipelineTests(unittest.TestCase):
             self.assertEqual(left.shape, self.frame.shape)
             self.assertEqual(right.shape, self.frame.shape)
             self.assertFalse(np.array_equal(left, right))
+
+    def test_4d_gaussians_persist_across_time(self) -> None:
+        renderer = TemporalGaussianRenderer(
+            gaussian_scale=1.35,
+            temporal_smoothing=0.75,
+            eye_separation=20,
+            depth_strength=1.0,
+            convergence=0.5,
+        )
+        disparity = (self.depth - 0.5) * 20
+        left, right = renderer.render(self.frame, self.depth, disparity)
+        self.assertEqual(left.shape, self.frame.shape)
+        self.assertEqual(right.shape, self.frame.shape)
+        self.assertEqual(renderer.last_gaussian_count, self.depth.size)
+
+        moved = np.roll(self.frame, 2, axis=1)
+        moved_depth = np.roll(self.depth, 2, axis=1)
+        renderer.render(moved, moved_depth, (moved_depth - 0.5) * 20)
+        self.assertEqual(renderer.last_gaussian_count, self.depth.size * 2)
+        self.assertGreater(renderer.last_temporal_reuse, 0.0)
 
     def test_short_video_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -72,6 +94,24 @@ class StereoPipelineTests(unittest.TestCase):
             self.assertEqual(result["output_kind"], "image")
             self.assertEqual(result["frames"], 1)
             self.assertEqual(events[-1][0], 1.0)
+
+    def test_4d_gaussian_video_end_to_end(self) -> None:
+        settings = replace(self.settings, render_method="gaussian-4d", gaussian_scale=1.25)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            output = root / "stereo.mp4"
+            writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 6.0, (128, 72))
+            self.assertTrue(writer.isOpened())
+            for index in range(4):
+                writer.write(np.roll(self.frame, index * 2, axis=1))
+            writer.release()
+
+            result = process_video(source, output, settings, DepthEngine(), lambda *_: None)
+            self.assertTrue(output.exists())
+            self.assertEqual(result["gaussian_mode"], "monocular-4d-lite")
+            self.assertGreater(result["average_gaussians_per_frame"], self.depth.size)
+            self.assertGreater(result["average_temporal_reuse_pct"], 0.0)
 
 
 if __name__ == "__main__":
