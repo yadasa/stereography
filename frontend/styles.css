@@ -91,6 +91,8 @@ button { color: inherit; }
 fieldset { margin: 0 0 18px; padding: 0; border: 0; }
 legend, .select-row label { color: var(--muted); font: 400 9px ui-monospace, 'SFMono-Regular', Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); padding: 3px; background: rgba(0,0,0,.25); }
+.segmented.three { grid-template-columns: repeat(3, 1fr); }
+.segmented.three button { padding-inline: 7px; font-size: 10px; }
 .segmented button { min-height: 38px; border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .segmented button.active { color: var(--ink); background: rgba(255,255,255,.08); box-shadow: 0 3px 12px rgba(0,0,0,.18); }
 .range-stack { display: grid; gap: 18px; padding: 4px 0 20px; }
@@ -146,11 +148,13 @@ select { appearance: none; color: #dce4ed; background: rgba(0,0,0,.25) url("data
 .comparison article p { margin: 0 0 8px; }
 .comparison article small { color: var(--cyan); font: 400 9px ui-monospace, 'SFMono-Regular', Consolas, monospace; }
 
-.guidance-grid { margin: 110px 0 90px; display: grid; grid-template-columns: .9fr 1fr 1fr; gap: 18px; align-items: start; }
+.guidance-grid { margin: 110px 0 90px; display: grid; grid-template-columns: .8fr repeat(3, 1fr); gap: 18px; align-items: start; }
 .guidance-grid > div:first-child { padding: 15px 24px 0 0; }
 .guidance-grid > div:first-child h2 { margin: 0; font-size: 35px; line-height: 1.08; letter-spacing: -.04em; max-width: 330px; font-weight: 500; }
 .method-card { border-top: 1px solid var(--line); padding: 20px 4px; }
 .method-card.recommended { border-color: rgba(113,246,208,.45); }
+.method-card.gaussian-card { border-color: rgba(180,140,255,.48); }
+.method-card.gaussian-card header b { color: #cfb5ff; }
 .method-card header { display: flex; justify-content: space-between; align-items: center; font: 500 9px ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: .09em; color: var(--muted); }
 .method-card header b { color: var(--cyan); font-weight: 400; }
 .method-card h3 { font-size: 20px; margin: 38px 0 10px; }
